@@ -1,0 +1,31 @@
+Name:                delimparse
+Version:             0.1.0
+Synopsis:            Attoparsec based tool for parsing/transforming tables of various formats.
+Description:         Tool for transforming table data.
+License:             GPL-3
+License-file:        LICENCE
+Author:              Andreas Jonsson
+Maintainer:          Andreas Jonsson <andreas.jonsson@kreablo.se>
+Copyright:           (c) 2016 Andreas Jonsson
+Cabal-version:       >= 1.10
+Build-type:          Simple
+
+Executable delimtabletransform
+           Build-depends: base,
+                          attoparsec,
+                          mtl,
+                          text
+           Main-is: delimtabletransform.hs
+           Ghc-options: -Wall
+           default-language: Haskell2010
+
+test-suite tests
+           Ghc-options: -Wall
+           default-extensions: OverloadedStrings
+           type: exitcode-stdio-1.0
+           hs-source-dirs: tests
+           Main-is: TestDelim.hs
+           Build-depends: base,
+                          hspec == 1.11,
+                          delimtabletransform
+           default-language: Haskell2010
