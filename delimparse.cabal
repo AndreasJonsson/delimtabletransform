@@ -1,5 +1,5 @@
 Name:                delimparse
-Version:             0.1.0
+Version:             0.1.1
 Synopsis:            Attoparsec based tool for parsing/transforming tables of various formats.
 Description:         Tool for transforming table data.
 License:             GPL-3
