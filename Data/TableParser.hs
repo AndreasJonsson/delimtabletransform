@@ -17,7 +17,7 @@ module Data.TableParser(
   TableCell(..)
 ) where
 
-import Prelude(Show, (-), ($), (++), String, foldr)
+import Prelude(Show, (-), ($), (++), String, foldr, Bool(..))
 import Data.Attoparsec.Text.Lazy
 import Data.TransformConfig
 import Control.Applicative
@@ -56,13 +56,13 @@ row ::  TransformConfig -> Parser TableRow
 row c = (\a b -> TableRow $ a <> pure b) <$> count (numColumns c - 1) (column c) <*> lastColumn c
 
 column :: TransformConfig -> Parser TableCell
-column c = TableCell <$> columnText (fmap endTok $ columnDelimiters c) (substitutions c)
+column c = TableCell <$> columnText c (fmap endTok $ columnDelimiters c) (substitutions c)
 
 lastColumn :: TransformConfig -> Parser TableCell
-lastColumn c = TableCell <$> columnText (fmap endTok (rowDelimiters c) ++ [endOfInput *> pure ""]) (substitutions c)
+lastColumn c = TableCell <$> columnText c (fmap endTok (rowDelimiters c) ++ [endOfInput *> pure ""]) (substitutions c)
 
-columnText :: [Parser Text] -> [(Text, Text)] -> Parser (Maybe Text)
-columnText stopTokens substs = checkNull <$> text
+columnText :: TransformConfig -> [Parser Text] -> [(Text, Text)] -> Parser (Maybe Text)
+columnText c stopTokens substs = checkNull <$> text
     where
       text :: Parser Text
       text = foldr (\t -> (t <|>)) moreText (substText substs ++ stopTokens)
@@ -71,9 +71,10 @@ columnText stopTokens substs = checkNull <$> text
       moreText     :: Parser Text
       moreText     = cons <$> anyChar <*> text
       checkNull :: Text -> (Maybe Text)
-      checkNull t = case t of
-                      "\0" -> Nothing
-                      _ -> Just t
+      checkNull t = case (t, nullLiteral c) of
+                      ("\0", _)      -> Nothing
+                      ("NULL", True) -> Nothing
+                      _              -> Just t
 
 
 cat :: Parser Text -> Parser Text -> Parser Text

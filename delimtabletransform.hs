@@ -9,7 +9,7 @@ Stability                : experimental
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
 
-import Prelude                    (flip, id, ($), (++), concat, String, foldl, read, (<=), (==), (.))
+import Prelude                    (flip, id, ($), (++), concat, String, foldl, read, (<=), (==), (.), Bool(..))
 import Data.Text                  (pack, unpack, Text)
 import Data.Text.IO               (putStr)
 import System.Console.GetOpt
@@ -35,7 +35,8 @@ defaultOptions = TransformConfig {
                    outputRowDelimiter = "!#!\\r\\n",
                    numColumns         = 0,
                    encodingText       = "utf8",
-                   encoding           = utf8
+                   encoding           = utf8,
+                   nullLiteral        = False
                  }
 
 options :: [OptDescr (TransformConfig -> TransformConfig)]
@@ -53,7 +54,9 @@ options = [
  Option [] ["num-columns"]      (ReqArg (\d opts -> opts {       numColumns = read d }) "COLUMNS")
          "Number of columns in the input.",
  Option [] ["output-row-delimiter"] (ReqArg(\d opts -> opts { outputRowDelimiter = pack d }) "DELIMITER" )
-         "Output row delimiter (default '!!!\\x1e\\n')"]
+         "Output row delimiter (default '!!!\\x1e\\n')",
+ Option [] ["null-literal"] (NoArg (\opts -> opts { nullLiteral = True }))
+         "Recognize the literal NULL as NULL value."]
 
 getOptions :: [String] -> IO (TransformConfig, [String])
 getOptions argv =

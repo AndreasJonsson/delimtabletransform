@@ -10,7 +10,7 @@ module Data.TransformConfig(
   TransformConfig(..)
 ) where
 
-import Prelude       (Int, Show)
+import Prelude       (Int, Show, Bool)
 import System.IO     (TextEncoding)
 import Data.Text     (Text)
 
@@ -33,6 +33,8 @@ data TransformConfig = TransformConfig {
       -- | The character encoding of the input.  (Text obtained from command line parameter.)
       encodingText       :: Text,
       -- | The character encoding of the input.
-      encoding           :: TextEncoding
+      encoding           :: TextEncoding,
+      -- | Recognize the literal string NULL as null value.
+      nullLiteral        :: Bool
     } deriving Show
 
