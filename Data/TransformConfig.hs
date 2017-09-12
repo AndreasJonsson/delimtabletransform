@@ -13,6 +13,7 @@ module Data.TransformConfig(
 import Prelude       (Int, Show, Bool)
 import System.IO     (TextEncoding)
 import Data.Text     (Text)
+import Data.Maybe
 
 data TransformConfig = TransformConfig {
       -- | The column delimiters verbatim text that terminates
@@ -25,7 +26,7 @@ data TransformConfig = TransformConfig {
       --   be substituted with the text in the second member.
       substitutions      :: [(Text, Text)],
       -- | The expected number of columns in the input.  'numColumns' is a hint used by the parsing.
-      numColumns         :: Int,
+      numColumns         :: Maybe Int,
       -- | The transformed output will be enclosed by the 'enclosedBy' text fragment.
       enclosedBy         :: Text,
       -- | The transformed output will used the 'outputRowDeliter' text fragment.
@@ -35,6 +36,8 @@ data TransformConfig = TransformConfig {
       -- | The character encoding of the input.
       encoding           :: TextEncoding,
       -- | Recognize the literal string NULL as null value.
-      nullLiteral        :: Bool
+      nullLiteral        :: Bool,
+      -- | Header rows to skip (default 0)
+      headerRows         :: Int
     } deriving Show
 

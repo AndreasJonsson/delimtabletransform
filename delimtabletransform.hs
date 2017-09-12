@@ -32,11 +32,12 @@ defaultOptions = TransformConfig {
                    rowDelimiters      = [],
                    substitutions      = [],
                    enclosedBy         = "\"",
-                   outputRowDelimiter = "!#!\\r\\n",
-                   numColumns         = 0,
+                   outputRowDelimiter = "\\r\\n",
+                   numColumns         = Nothing,
                    encodingText       = "utf8",
                    encoding           = utf8,
-                   nullLiteral        = False
+                   nullLiteral        = False,
+                   headerRows         = 0
                  }
 
 options :: [OptDescr (TransformConfig -> TransformConfig)]
@@ -51,12 +52,17 @@ options = [
          "Character encoding of the input files.",
  Option [] ["enclosed-by"]      (ReqArg (\d opts -> opts {       enclosedBy = pack d }) "TEXT")
          "Character sequence to enclose fields by",
- Option [] ["num-columns"]      (ReqArg (\d opts -> opts {       numColumns = read d }) "COLUMNS")
+ Option [] ["num-columns"]      (OptArg (\d opts -> opts {       numColumns = case d of
+                                                                                Just d' -> Just (read d')
+                                                                                Nothing -> Nothing
+                                                         }) "COLUMNS")
          "Number of columns in the input.",
  Option [] ["output-row-delimiter"] (ReqArg(\d opts -> opts { outputRowDelimiter = pack d }) "DELIMITER" )
-         "Output row delimiter (default '!!!\\x1e\\n')",
+         "Output row delimiter (default '\\r\\n')",
  Option [] ["null-literal"] (NoArg (\opts -> opts { nullLiteral = True }))
-         "Recognize the literal NULL as NULL value."]
+         "Recognize the literal NULL as NULL value.",
+ Option [] ["header-rows"]      (ReqArg (\d opts -> opts {       headerRows = read d }) "NUMBER")
+         "Number of header rows to skip."]
 
 getOptions :: [String] -> IO (TransformConfig, [String])
 getOptions argv =
@@ -66,7 +72,7 @@ getOptions argv =
         where header = "Usage: delimtabletransform [OPTION...] files..."
 
 validateAndFillDefault :: TransformConfig -> IO TransformConfig
-validateAndFillDefault = cd >>> rd >>> od >>> addSubst >>> enc >=> nc
+validateAndFillDefault = cd >>> rd >>> od >>> addSubst >>> enc
   where
     cd :: TransformConfig -> TransformConfig
     cd c = case columnDelimiters c of
@@ -76,10 +82,6 @@ validateAndFillDefault = cd >>> rd >>> od >>> addSubst >>> enc >=> nc
     rd c = case rowDelimiters c of
              [] -> c { rowDelimiters    = [ "\n", "\r\n" ] }
              _  -> c { rowDelimiters    = esc $ rowDelimiters c }
-    nc :: TransformConfig -> IO TransformConfig
-    nc c = do
-      when (numColumns c <= 0) $ throwError $ strMsg "--num-columns must be set!"
-      pure c
     od :: TransformConfig -> TransformConfig
     od c = c { outputRowDelimiter = esc' $ outputRowDelimiter c }
     enc :: TransformConfig -> IO TransformConfig
@@ -97,7 +99,7 @@ validateAndFillDefault = cd >>> rd >>> od >>> addSubst >>> enc >=> nc
                                                          ("\\"        , "\\\\"              ) ] }
 
 parseSubst :: String -> [(Text, Text)]
-parseSubst s = case findIndex (== '=') s of
+parseSubst s = case elemIndex '=' s of
                  Just i  -> pure $ (splitAt i >>> second (drop 1) >>> pack *** pack) s
                  Nothing -> []
 

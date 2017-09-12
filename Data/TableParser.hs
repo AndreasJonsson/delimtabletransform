@@ -17,11 +17,12 @@ module Data.TableParser(
   TableCell(..)
 ) where
 
-import Prelude(Show, (-), ($), (++), String, foldr, Bool(..))
+import Prelude(Show, (-), ($), (++), String, foldr, Bool(..), Int, ($!), flip, (.), undefined)
 import Data.Attoparsec.Text.Lazy
 import Data.TransformConfig
 import Control.Applicative
-import Data.Text               (Text, cons)
+import Control.Arrow
+import Data.Text               (Text, cons, unpack)
 import Data.Monoid
 import System.IO                                    hiding (hGetContents)
 import Control.Monad.Error     (strMsg, throwError)
@@ -31,6 +32,16 @@ import Data.Maybe
 
 newtype TableRow = TableRow [TableCell]         deriving Show
 newtype TableCell = TableCell (Maybe Text)      deriving Show
+
+data EndType = EndOfCell | EndOfRow | EndOfInput deriving Show
+
+{-
+instance Monoid EndType where
+  mempty = EndOfUnknown
+  EndOfUnknown `mappend` e = e
+  e `mappend` EndOfUnknown = e
+  _ `mappend` _            = undefined
+-}
 
 -- | Read input and transform the data to table rows.  The table rows
 --   are passed to a callback function in order.
@@ -43,45 +54,79 @@ transformTable conf files cb = mapM_ doFile files
       doFile file = withFile file ReadMode
                              (\h -> do
                                 hSetEncoding h (encoding conf)
-                                hGetContents h >>= parseTable)
+                                hGetContents h >>= parseTableSkipHeader)
 
+
+      parseTableSkipHeader content = do
+        let Done contents' _ = parse (skipRows conf (headerRows conf)) content
+        parseTable contents'
+      
       parseTable ""       = pure ()
-      parseTable contents = case parse (row conf) contents of
-                              Done contents' r -> do
-                                cb r
-                                parseTable contents'
-                              Fail _ _ msg      -> throwError $ strMsg msg
+      parseTable contents =
+        case parse (row conf) contents of
+          Done contents' r -> do
+            cb r
+            parseTable contents'
+          Fail _ _ msg      -> throwError $ strMsg msg
+
+skipRows :: TransformConfig -> Int -> Parser ()
+skipRows _ 0 = pure ()
+skipRows c n = row c >> skipRows c (n - 1)
 
 row ::  TransformConfig -> Parser TableRow
-row c = (\a b -> TableRow $ a <> pure b) <$> count (numColumns c - 1) (column c) <*> lastColumn c
+row c = case numColumns c of
+  Just n -> combine (count (n - 1) (column c)) $ lastColumn c
+  Nothing -> combine (many $ column c) $ lastColumn c
+  where
+    combine :: Parser [TableCell] -> Parser TableCell -> Parser TableRow
+    combine p last = TableRow <$> ((flip (<>) <$> p) <*> (pure <$> last))
 
 column :: TransformConfig -> Parser TableCell
-column c = TableCell <$> columnText c (fmap endTok $ columnDelimiters c) (substitutions c)
+column c = do
+  (et, cell) <- genericCell c
+  case et of
+    EndOfCell -> pure cell
+    _         -> mzero
 
 lastColumn :: TransformConfig -> Parser TableCell
-lastColumn c = TableCell <$> columnText c (fmap endTok (rowDelimiters c) ++ [endOfInput *> pure ""]) (substitutions c)
+lastColumn c = do
+  (et, cell) <- genericCell c
+  case et of
+    EndOfRow   -> pure cell
+    EndOfInput -> pure cell
+    EndOfCell  -> mzero
 
-columnText :: TransformConfig -> [Parser Text] -> [(Text, Text)] -> Parser (Maybe Text)
+genericCell :: TransformConfig -> Parser (EndType, TableCell)
+genericCell c = second TableCell <$> columnText c (eoc ++ eor ++ eoi) (substitutions c)
+  where
+    eoc :: [Parser EndType]
+    eoc = fmap (endTok EndOfCell) (columnDelimiters c)
+    eor :: [Parser EndType]
+    eor = fmap (endTok EndOfRow) (rowDelimiters c)
+    eoi :: [Parser EndType]
+    eoi = [endOfInput *> pure EndOfInput]
+
+columnText :: TransformConfig -> [Parser EndType] -> [(Text, Text)] -> Parser (EndType, Maybe Text)
 columnText c stopTokens substs = checkNull <$> text
     where
-      text :: Parser Text
-      text = foldr (\t -> (t <|>)) moreText (substText substs ++ stopTokens)
-      substText    :: [(Text, Text)] -> [Parser Text]
+      text :: Parser (EndType, Text)
+      text = foldr (<|>) (moreText) (substText substs ++ (fmap (\e -> (e, "")) <$> stopTokens))
+      substText    :: [(Text, Text)] -> [Parser (EndType, Text)]
       substText = fmap (\s -> substitution s `cat` text)
-      moreText     :: Parser Text
-      moreText     = cons <$> anyChar <*> text
-      checkNull :: Text -> (Maybe Text)
-      checkNull t = case (t, nullLiteral c) of
-                      ("\0", _)      -> Nothing
-                      ("NULL", True) -> Nothing
-                      _              -> Just t
+      moreText     :: Parser (EndType, Text)
+      moreText     = second <$> (cons <$> anyChar) <*> text
+      checkNull :: (EndType, Text) -> (EndType, Maybe Text)
+      checkNull (e, t) = case (t, nullLiteral c) of
+                           ("\0", _)      -> (e, Nothing)
+                           ("NULL", True) -> (e, Nothing)
+                           _              -> (e, Just t)
 
 
-cat :: Parser Text -> Parser Text -> Parser Text
-cat t1 t2 = (<>) <$> t1 <*> t2
+cat :: Parser Text -> Parser (EndType, Text) -> Parser (EndType, Text)
+cat t1 t2 = second <$> ((<>) <$> t1) <*> t2
 
-endTok :: Text -> Parser Text
-endTok t = string t *> pure ""
+endTok :: EndType -> Text -> Parser EndType
+endTok endType t = string t *> pure endType
 
 substitution :: (Text, Text) -> Parser Text
 substitution (from, to) = string from *> pure to
