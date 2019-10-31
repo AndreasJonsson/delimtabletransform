@@ -6,7 +6,7 @@ License                  : GPL-3
 Maintainer               : andreas.jonsson@kreablo.se
 Stability                : experimental
 -}
-module Data.TransformConfig(
+module TableTransform.Config.TransformConfig(
   TransformConfig(..)
 ) where
 
@@ -29,7 +29,9 @@ data TransformConfig = TransformConfig {
       numColumns         :: Maybe Int,
       -- | The transformed output will be enclosed by the 'enclosedBy' text fragment.
       enclosedBy         :: Text,
-      -- | The transformed output will used the 'outputRowDeliter' text fragment.
+      -- | The escape sequence to use for an escaped enclose by character.
+      escapedQuote       :: Text,
+      -- | The transformed output will used the 'outputRowDelimiter' text fragment.
       outputRowDelimiter :: Text,
       -- | The character encoding of the input.  (Text obtained from command line parameter.)
       encodingText       :: Text,

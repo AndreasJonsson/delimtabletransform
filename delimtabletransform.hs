@@ -9,20 +9,19 @@ Stability                : experimental
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
 
-import Prelude                    (flip, id, ($), (++), concat, String, foldl, read, (<=), (==), (.), Bool(..))
+import Prelude                    (flip, id, ($), (++), concat, String, foldl, read, Bool(..))
 import Data.Text                  (pack, unpack, Text)
-import Data.Text.IO               (putStr)
 import System.Console.GetOpt
 import Control.Applicative
 import Control.Arrow
 import Control.Monad
 import System.Environment         (getArgs)
-import System.IO                  hiding (putStr)
+import System.IO
 import System.IO.Error
-import Control.Monad.Error
 import Data.Monoid
-import Data.TransformConfig
-import Data.TableParser
+import TableTransform.Config.TransformConfig
+import TableTransform.Text.TableParser
+import TableTransform.IO.Csv
 import Data.List
 import Data.Maybe
 
@@ -32,6 +31,7 @@ defaultOptions = TransformConfig {
                    rowDelimiters      = [],
                    substitutions      = [],
                    enclosedBy         = "\"",
+                   escapedQuote       = "\"\"",
                    outputRowDelimiter = "\\r\\n",
                    numColumns         = Nothing,
                    encodingText       = "utf8",
@@ -89,7 +89,8 @@ validateAndFillDefault = cd >>> rd >>> od >>> addSubst >>> enc
               "utf8"   -> pure c { encoding = utf8  }
               "utf16"  -> pure c { encoding = utf16 }
               "latin1" -> pure c { encoding = latin1 }
-              e       -> throwError $ strMsg $ "Invalid character encoding: '" ++ unpack e ++ "'"
+              "iso-8859-1" -> pure c { encoding = latin1 }
+              e       -> fail $ "Invalid character encoding: '" ++ unpack e ++ "'"
     esc :: [Text] -> [Text]
     esc = fmap esc'
     esc' :: Text -> Text
@@ -108,25 +109,6 @@ main = do
   (config, files) <- getArgs >>= getOptions >>= runKleisli (first $ Kleisli validateAndFillDefault)
   columnDelim <- case columnDelimiters config of
                    (cd:_) -> pure cd
-                   _      -> throwError $ strMsg "No column delimiters!"
+                   _      -> fail "No column delimiters!"
   transformTable config files (printRow (enclosedBy config) columnDelim $ outputRowDelimiter config)
 
-printRow :: Text -> Text -> Text -> TableRow -> IO ()
-printRow enclose columnDelim rowDelim (TableRow cells) = do
-  printCells enclose columnDelim cells
-  putStr rowDelim
-
-printCells :: Text -> Text -> [TableCell] -> IO ()
-printCells _ _ [] = pure ()
-printCells enclose _ [tc] = printCellText enclose tc
-printCells enclose columnDelim (tc:cells) = do
-  printCellText enclose tc
-  putStr columnDelim
-  printCells enclose columnDelim cells
-
-printCellText :: Text -> TableCell -> IO ()
-printCellText enclose (TableCell (Just t)) = do
-  putStr enclose
-  putStr t
-  putStr enclose
-printCellText _       (TableCell Nothing)  = putStr "NULL"

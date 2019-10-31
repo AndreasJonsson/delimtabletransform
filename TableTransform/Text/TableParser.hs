@@ -11,24 +11,26 @@ Parse a file on a delimited format to produce a data structure representing a ta
 
 {-# LANGUAGE OverloadedStrings #-}
 
-module Data.TableParser(
+module TableTransform.Text.TableParser(
   transformTable,
   TableRow(..),
   TableCell(..)
 ) where
 
-import Prelude(Show, (-), ($), (++), String, foldr, Bool(..), Int, ($!), flip, (.), undefined)
+import Prelude(Show, (-), ($), (++), String, foldr, Bool(..), Int, flip, (/=), fst)
 import Data.Attoparsec.Text.Lazy
-import Data.TransformConfig
+import TableTransform.Config.TransformConfig
 import Control.Applicative
 import Control.Arrow
-import Data.Text               (Text, cons, unpack)
+import Data.Text               (Text, cons)
 import Data.Monoid
 import System.IO                                    hiding (hGetContents)
-import Control.Monad.Error     (strMsg, throwError)
 import Control.Monad
 import Data.Text.Lazy.IO       (hGetContents)
 import Data.Maybe
+import qualified Data.Text as T
+import Data.List (any)
+import Data.Functor
 
 newtype TableRow = TableRow [TableCell]         deriving Show
 newtype TableCell = TableCell (Maybe Text)      deriving Show
@@ -67,7 +69,7 @@ transformTable conf files cb = mapM_ doFile files
           Done contents' r -> do
             cb r
             parseTable contents'
-          Fail _ _ msg      -> throwError $ strMsg msg
+          Fail _ _ msg      -> fail msg
 
 skipRows :: TransformConfig -> Int -> Parser ()
 skipRows _ 0 = pure ()
@@ -104,13 +106,13 @@ genericCell c = second TableCell <$> columnText c (eoc ++ eor ++ eoi) (substitut
     eor :: [Parser EndType]
     eor = fmap (endTok EndOfRow) (rowDelimiters c)
     eoi :: [Parser EndType]
-    eoi = [endOfInput *> pure EndOfInput]
+    eoi = [endOfInput $> EndOfInput]
 
 columnText :: TransformConfig -> [Parser EndType] -> [(Text, Text)] -> Parser (EndType, Maybe Text)
-columnText c stopTokens substs = checkNull <$> text
+columnText c stopTokens substs = enclosedText <|> checkNull <$> text
     where
       text :: Parser (EndType, Text)
-      text = foldr (<|>) (moreText) (substText substs ++ (fmap (\e -> (e, "")) <$> stopTokens))
+      text = foldr (<|>) moreText (substText substs ++ (fmap (\e -> (e, "")) <$> stopTokens))
       substText    :: [(Text, Text)] -> [Parser (EndType, Text)]
       substText = fmap (\s -> substitution s `cat` text)
       moreText     :: Parser (EndType, Text)
@@ -121,12 +123,27 @@ columnText c stopTokens substs = checkNull <$> text
                            ("NULL", True) -> (e, Nothing)
                            _              -> (e, Just t)
 
+      enclosedText :: Parser (EndType, Maybe Text)
+      enclosedText =
+        case T.uncons (enclosedBy c) of
+          Nothing -> mzero
+          Just (w, _) -> do
+            _ <- string $ enclosedBy c
+            t <- enclosedText' (w : maybeToList (fst <$> T.uncons (escapedQuote c)))
+            _ <- string $ enclosedBy c
+            st <- foldr (<|>) mzero stopTokens
+            pure (st, Just t)
+
+      enclosedText' :: String -> Parser Text
+      enclosedText' w = do
+        t <- takeWhile (\w' -> any (/= w') w)
+        (string (escapedQuote c) >> ((t <> enclosedBy c) <>) <$> enclosedText' w) <|> pure t
 
 cat :: Parser Text -> Parser (EndType, Text) -> Parser (EndType, Text)
 cat t1 t2 = second <$> ((<>) <$> t1) <*> t2
 
 endTok :: EndType -> Text -> Parser EndType
-endTok endType t = string t *> pure endType
+endTok endType t = string t $> endType
 
 substitution :: (Text, Text) -> Parser Text
-substitution (from, to) = string from *> pure to
+substitution (from, to) = string from $> to
