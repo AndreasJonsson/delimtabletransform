@@ -31,7 +31,11 @@ data TransformConfig = TransformConfig {
       enclosedBy         :: Text,
       -- | The escape sequence to use for an escaped enclose by character.
       escapedQuote       :: Text,
-      -- | The transformed output will used the 'outputRowDelimiter' text fragment.
+      -- | The transformed output will use the 'outputColumnDelimiter' text fragment to separate columns.
+      inputEnclosedBy    :: Text,
+      inputEscapedQuote  :: Text,
+      outputColumnDelimiter :: Text,
+      -- | The transformed output will use the 'outputRowDelimiter' text fragment to separate rows.
       outputRowDelimiter :: Text,
       -- | The character encoding of the input.  (Text obtained from command line parameter.)
       encodingText       :: Text,

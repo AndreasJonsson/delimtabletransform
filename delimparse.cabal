@@ -16,7 +16,10 @@ Executable delimtabletransform
                           mtl,
                           text
            Main-is: delimtabletransform.hs
-           Ghc-options: -Wall
+           Other-modules: TableTransform.Config.TransformConfig,
+                          TableTransform.IO.Csv,
+                          TableTransform.Text.TableParser 
+           Ghc-options: -Wall -O -static -pgml g++ -optc-static -optl-static
            default-language: Haskell2010
 
 test-suite tests

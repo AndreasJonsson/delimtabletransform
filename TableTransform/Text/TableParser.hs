@@ -125,19 +125,19 @@ columnText c stopTokens substs = enclosedText <|> checkNull <$> text
 
       enclosedText :: Parser (EndType, Maybe Text)
       enclosedText =
-        case T.uncons (enclosedBy c) of
+        case T.uncons (inputEnclosedBy c) of
           Nothing -> mzero
           Just (w, _) -> do
-            _ <- string $ enclosedBy c
-            t <- enclosedText' (w : maybeToList (fst <$> T.uncons (escapedQuote c)))
-            _ <- string $ enclosedBy c
+            _ <- string $ inputEnclosedBy c
+            t <- enclosedText' (w : maybeToList (fst <$> T.uncons (inputEscapedQuote c)))
+            _ <- string $ inputEnclosedBy c
             st <- foldr (<|>) mzero stopTokens
             pure (st, Just t)
 
       enclosedText' :: String -> Parser Text
       enclosedText' w = do
         t <- takeWhile (\w' -> any (/= w') w)
-        (string (escapedQuote c) >> ((t <> enclosedBy c) <>) <$> enclosedText' w) <|> pure t
+        (string (inputEscapedQuote c) >> ((t <> inputEnclosedBy c) <>) <$> enclosedText' w) <|> pure t
 
 cat :: Parser Text -> Parser (EndType, Text) -> Parser (EndType, Text)
 cat t1 t2 = second <$> ((<>) <$> t1) <*> t2

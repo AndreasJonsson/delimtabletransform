@@ -32,6 +32,9 @@ defaultOptions = TransformConfig {
                    substitutions      = [],
                    enclosedBy         = "\"",
                    escapedQuote       = "\"\"",
+                   inputEnclosedBy    = "\"",
+                   inputEscapedQuote  = "\"\"",
+                   outputColumnDelimiter = ",",
                    outputRowDelimiter = "\\r\\n",
                    numColumns         = Nothing,
                    encodingText       = "utf8",
@@ -52,11 +55,19 @@ options = [
          "Character encoding of the input files.",
  Option [] ["enclosed-by"]      (ReqArg (\d opts -> opts {       enclosedBy = pack d }) "TEXT")
          "Character sequence to enclose fields by",
+ Option [] ["escaped-quote"] (OptArg (\d opts -> opts    { escapedQuote     = fromMaybe "" $ pack <$> d }) "ESCAPE")
+         "esqaped quote character sequence for the input",
  Option [] ["num-columns"]      (OptArg (\d opts -> opts {       numColumns = case d of
                                                                                 Just d' -> Just (read d')
                                                                                 Nothing -> Nothing
                                                          }) "COLUMNS")
          "Number of columns in the input.",
+ Option [] ["input-enclosed-by"] (OptArg (\d opts -> opts { inputEnclosedBy  = fromMaybe "" $ pack <$> d }) "TEXT")
+         "start quote character sequence for the input",
+ Option [] ["input-escaped-quote"] (OptArg (\d opts -> opts { inputEscapedQuote      = fromMaybe "" $ pack <$> d }) "ESCAPE")
+         "esqaped quote character sequence for the input",
+ Option [] ["output-column-delimiter"] (ReqArg(\d opts -> opts { outputColumnDelimiter = pack d }) "DELIMITER" )
+         "Output row delimiter (default '\\r\\n')",
  Option [] ["output-row-delimiter"] (ReqArg(\d opts -> opts { outputRowDelimiter = pack d }) "DELIMITER" )
          "Output row delimiter (default '\\r\\n')",
  Option [] ["null-literal"] (NoArg (\opts -> opts { nullLiteral = True }))
@@ -86,7 +97,7 @@ validateAndFillDefault = cd >>> rd >>> od >>> addSubst >>> enc
     od c = c { outputRowDelimiter = esc' $ outputRowDelimiter c }
     enc :: TransformConfig -> IO TransformConfig
     enc c = case encodingText c of
-              "utf8"   -> pure c { encoding = utf8  }
+              "utf8"   -> pure c { encoding = utf8_bom  }
               "utf16"  -> pure c { encoding = utf16 }
               "latin1" -> pure c { encoding = latin1 }
               "iso-8859-1" -> pure c { encoding = latin1 }
@@ -107,8 +118,7 @@ parseSubst s = case elemIndex '=' s of
 main :: IO ()
 main = do
   (config, files) <- getArgs >>= getOptions >>= runKleisli (first $ Kleisli validateAndFillDefault)
-  columnDelim <- case columnDelimiters config of
-                   (cd:_) -> pure cd
-                   _      -> fail "No column delimiters!"
-  transformTable config files (printRow (enclosedBy config) columnDelim $ outputRowDelimiter config)
+  transformTable config files (printRow (enclosedBy config) 
+                                (outputColumnDelimiter config)
+                                (outputRowDelimiter config))
 
